@@ -237,6 +237,7 @@ int __fastcall mpkFopenByIdHook(void *pThis, void *EDX, void *mpkObject,
 #endif
 
   std::vector<std::string> categories;
+  categories.push_back("lang=ru");
   if (Config::config().j["general"]["replaceCGs"].get<bool>() == true)
     categories.push_back("hqCG");
   if (Config::config().j["fmv"]["useHqAudio"].get<bool>() == true)
@@ -273,8 +274,12 @@ int __cdecl mpkFslurpByIdHook(uint8_t mpkId, int fileId, void **ppOutData) {
 
 const char *__cdecl getStringFromScriptHook(int scriptId, int stringId) {
   int fileId = scriptIdsToFiles[scriptId];
-  if (Config::config().j["general"]["fixTranslation"].get<bool>() == true) {
-    json targets = Config::stringredirection().j["fixTranslation"];
+  std::vector<std::string> categories;
+  categories.push_back("lang=ru");
+  if (Config::config().j["general"]["fixTranslation"].get<bool>() == true)
+	  categories.push_back("fixTranslation");
+  for (const auto &i : categories) {
+    json targets = Config::stringredirection().j[i];
     std::string sFileId = std::to_string(fileId);
     if (targets.count(sFileId) > 0) {
       std::string sStringId = std::to_string(stringId);
