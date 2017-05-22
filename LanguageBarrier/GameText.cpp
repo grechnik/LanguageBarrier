@@ -186,6 +186,8 @@ static uintptr_t gameExeDialogueLayoutWidthLookup2 = NULL;
 static uintptr_t gameExeDialogueLayoutWidthLookup2Return = NULL;
 static uintptr_t gameExeDialogueLayoutWidthLookup3 = NULL;
 static uintptr_t gameExeDialogueLayoutWidthLookup3Return = NULL;
+static uintptr_t gameExeTipsListWidthLookup = NULL;
+static uintptr_t gameExeTipsListWidthLookupReturn = NULL;
 
 static DialoguePage_t *gameExeDialoguePages =
     NULL;  // (DialoguePage_t *)0x164D680;
@@ -223,6 +225,13 @@ __declspec(naked) void dialogueLayoutWidthLookup3Hook() {
   __asm {
     movzx ecx, widths[edx]
     jmp gameExeDialogueLayoutWidthLookup3Return
+  }
+}
+
+__declspec(naked) void tipsListWidthLookupHook() {
+  __asm {
+    movzx eax, widths[edx]
+    jmp gameExeTipsListWidthLookupReturn
   }
 }
 
@@ -368,6 +377,11 @@ void gameTextInit() {
                        dialogueLayoutWidthLookup3Hook, NULL);
   gameExeDialogueLayoutWidthLookup3Return =
       (uintptr_t)((uint8_t *)gameExeDialogueLayoutWidthLookup3 + 0x7);
+  scanCreateEnableHook("game", "tipsListWidthLookup",
+                       &gameExeTipsListWidthLookup,
+                       tipsListWidthLookupHook, NULL);
+  gameExeTipsListWidthLookupReturn =
+      (uintptr_t)((uint8_t *)gameExeTipsListWidthLookup + 0x14);
 
   FILE *widthsfile = fopen("languagebarrier\\widths.bin", "rb");
   fread(widths, 1, TOTAL_NUM_CHARACTERS, widthsfile);
