@@ -188,6 +188,8 @@ static uintptr_t gameExeDialogueLayoutWidthLookup3 = NULL;
 static uintptr_t gameExeDialogueLayoutWidthLookup3Return = NULL;
 static uintptr_t gameExeTipsListWidthLookup = NULL;
 static uintptr_t gameExeTipsListWidthLookupReturn = NULL;
+static uintptr_t gameExeDialogueSetLineBreakFlags = NULL;
+static uintptr_t gameExeDialogueSetLineBreakFlagsReturn = NULL;
 
 static DialoguePage_t *gameExeDialoguePages =
     NULL;  // (DialoguePage_t *)0x164D680;
@@ -196,8 +198,10 @@ static uint8_t *gameExeGlyphWidthsFont1 = NULL;        // = (uint8_t *)0x52C7F0;
 static uint8_t *gameExeGlyphWidthsFont2 = NULL;        // = (uint8_t *)0x52E058;
 static int *gameExeColors = NULL;                      // = (int *)0x52E1E8;
 static uint8_t *gameExeBacklogHighlightHeight = NULL;  // = (uint8_t *)0x435DD4;
+static uint8_t *gameExeLineBreakFlags = NULL;
 
 static uint8_t widths[lb::TOTAL_NUM_CHARACTERS];
+static uint8_t charFlags[lb::TOTAL_NUM_CHARACTERS];
 
 static std::string *outlineBuffer;
 
@@ -232,6 +236,23 @@ __declspec(naked) void tipsListWidthLookupHook() {
   __asm {
     movzx eax, widths[edx]
     jmp gameExeTipsListWidthLookupReturn
+  }
+}
+
+__declspec(naked) void dialogueSetLineBreakFlagsHook() {
+  __asm {
+    test charFlags[esi], 1
+    jz nope
+    mov ecx, [gameExeLineBreakFlags]
+    test charFlags[edx], 1
+    jz noprev
+    or byte ptr [eax+ecx], 9
+noprev:
+    test charFlags[edi], 1
+    jz nope
+    or byte ptr [eax+ecx], 0Ah
+nope:
+    jmp gameExeDialogueSetLineBreakFlagsReturn
   }
 }
 
@@ -382,12 +403,29 @@ void gameTextInit() {
                        tipsListWidthLookupHook, NULL);
   gameExeTipsListWidthLookupReturn =
       (uintptr_t)((uint8_t *)gameExeTipsListWidthLookup + 0x14);
+  scanCreateEnableHook("game", "dialogueSetLineBreakFlags",
+                       &gameExeDialogueSetLineBreakFlags,
+                       dialogueSetLineBreakFlagsHook, NULL);
+  gameExeLineBreakFlags =
+      (uint8_t *)(*(uint32_t *)((uint8_t *)gameExeDialogueSetLineBreakFlags + 0x12));
+  gameExeDialogueSetLineBreakFlagsReturn =
+      (uintptr_t)((uint8_t *)gameExeDialogueSetLineBreakFlags + 0x26);
 
   FILE *widthsfile = fopen("languagebarrier\\widths.bin", "rb");
   fread(widths, 1, TOTAL_NUM_CHARACTERS, widthsfile);
   fclose(widthsfile);
   memcpy(gameExeGlyphWidthsFont1, widths, GLYPH_RANGE_FULLWIDTH_START);
   memcpy(gameExeGlyphWidthsFont2, widths, GLYPH_RANGE_FULLWIDTH_START);
+
+  FILE *charFlagsFile = fopen("languagebarrier\\charflags.bin", "rb");
+  if (charFlagsFile) {
+    fread(charFlags, 1, TOTAL_NUM_CHARACTERS, charFlagsFile);
+    fclose(charFlagsFile);
+  } else {
+    // fallback to default: english letters and digits
+    memset(charFlags + 1, 1, 26 + 26 + 10);
+    memset(charFlags + 0x80, 1, 26 + 26 + 10);
+  }
 }
 
 int __cdecl dialogueLayoutRelatedHook(int unk0, int *unk1, int *unk2, int unk3,
