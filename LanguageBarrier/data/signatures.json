@@ -66,6 +66,16 @@
             "offset": 0,
             "occurrence": 0
         },
+        "getVisibleLinksWidthLookup1": {
+            "pattern": "81 FA 80 00 00 00 73 0A 85 D2 74 06 8B CB D1 E9 EB 30 81 FA ?? ?? ?? ?? 73 0F 0F B6 8A ?? ?? ?? ?? 0F AF CB C1 E9 05 EB 19",
+            "offset": 0,
+            "occurrence": 0
+        },
+        "getVisibleLinksWidthLookup2": {
+            "pattern": "81 FA 80 00 00 00 73 0A 85 D2 74 06 8B CB D1 E9 EB 30 81 FA ?? ?? ?? ?? 73 0F 0F B6 8A ?? ?? ?? ?? 0F AF CB C1 E9 05 EB 19",
+            "offset": 0,
+            "occurrence": 0
+        },
         "tipsListWidthLookup": {
             "pattern": "73 45 8B 45 08 8B 5D 24 ?? ?? ?? 74 1D 0F B6 ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? 0F AF C3 C1 E8 05",
             "offset": 0,

@@ -191,6 +191,11 @@ static uintptr_t gameExeTipsListWidthLookupReturn = NULL;
 static uintptr_t gameExeDialogueSetLineBreakFlags = NULL;
 static uintptr_t gameExeDialogueSetLineBreakFlagsReturn = NULL;
 
+static uintptr_t gameExeGetVisibleLinksWidthLookup1 = NULL;
+static uintptr_t gameExeGetVisibleLinksWidthLookup1Return = NULL;
+static uintptr_t gameExeGetVisibleLinksWidthLookup2 = NULL;
+static uintptr_t gameExeGetVisibleLinksWidthLookup2Return = NULL;
+
 static DialoguePage_t *gameExeDialoguePages =
     NULL;  // (DialoguePage_t *)0x164D680;
 
@@ -236,6 +241,20 @@ __declspec(naked) void tipsListWidthLookupHook() {
   __asm {
     movzx eax, widths[edx]
     jmp gameExeTipsListWidthLookupReturn
+  }
+}
+
+__declspec(naked) void getVisibleLinksWidthLookupHook1() {
+  __asm {
+    movzx ecx, widths[edx]
+    jmp gameExeGetVisibleLinksWidthLookup1Return
+  }
+}
+
+__declspec(naked) void getVisibleLinksWidthLookupHook2() {
+  __asm {
+    movzx ecx, widths[edx]
+    jmp gameExeGetVisibleLinksWidthLookup2Return
   }
 }
 
@@ -406,6 +425,18 @@ void gameTextInit() {
   scanCreateEnableHook("game", "dialogueSetLineBreakFlags",
                        &gameExeDialogueSetLineBreakFlags,
                        dialogueSetLineBreakFlagsHook, NULL);
+  // Same situation as getSc3StringDisplayWidthFont1/2 above,
+  // two matches of the same signature
+  scanCreateEnableHook("game", "getVisibleLinksWidthLookup1",
+                       &gameExeGetVisibleLinksWidthLookup1,
+                       getVisibleLinksWidthLookupHook1, NULL);
+  gameExeGetVisibleLinksWidthLookup1Return =
+      (uintptr_t)((uint8_t *)gameExeGetVisibleLinksWidthLookup1 + 0x21);
+  scanCreateEnableHook("game", "getVisibleLinksWidthLookup2",
+                       &gameExeGetVisibleLinksWidthLookup2,
+                       getVisibleLinksWidthLookupHook2, NULL);
+  gameExeGetVisibleLinksWidthLookup2Return =
+      (uintptr_t)((uint8_t *)gameExeGetVisibleLinksWidthLookup2 + 0x21);
   gameExeLineBreakFlags =
       (uint8_t *)(*(uint32_t *)((uint8_t *)gameExeDialogueSetLineBreakFlags + 0x12));
   gameExeDialogueSetLineBreakFlagsReturn =
