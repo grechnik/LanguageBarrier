@@ -193,6 +193,10 @@ static uintptr_t gameExeDialogueLayoutWidthLookup3 = NULL;
 static uintptr_t gameExeDialogueLayoutWidthLookup3Return = NULL;
 static uintptr_t gameExeTipsListWidthLookup = NULL;
 static uintptr_t gameExeTipsListWidthLookupReturn = NULL;
+static uintptr_t gameExeNewTipWidthLookup = NULL;
+static uintptr_t gameExeNewTipWidthLookupReturn = NULL;
+static uintptr_t gameExeTipAltTitleWidthLookup = NULL;
+static uintptr_t gameExeTipAltTitleWidthLookupReturn = NULL;
 static uintptr_t gameExeDialogueSetLineBreakFlags = NULL;
 static uintptr_t gameExeDialogueSetLineBreakFlagsReturn = NULL;
 
@@ -241,6 +245,20 @@ __declspec(naked) void tipsListWidthLookupHook() {
   __asm {
     movzx eax, widths[edx]
     jmp gameExeTipsListWidthLookupReturn
+  }
+}
+
+__declspec(naked) void newTipWidthLookupHook() {
+  __asm {
+    movzx edi, widths[edx]
+    jmp gameExeNewTipWidthLookupReturn
+  }
+}
+
+__declspec(naked) void tipAltTitleWidthLookupHook() {
+  __asm {
+    movzx ecx, widths[edx]
+    jmp gameExeTipAltTitleWidthLookupReturn
   }
 }
 
@@ -422,6 +440,16 @@ void gameTextInit() {
       (uint8_t *)(*(uint32_t *)((uint8_t *)gameExeDialogueSetLineBreakFlags + 0x12));
   gameExeDialogueSetLineBreakFlagsReturn =
       (uintptr_t)((uint8_t *)gameExeDialogueSetLineBreakFlags + 0x26);
+  scanCreateEnableHook("game", "newTipWidthLookup",
+                       &gameExeNewTipWidthLookup,
+                       newTipWidthLookupHook, NULL);
+  gameExeNewTipWidthLookupReturn =
+      (uintptr_t)((uint8_t *)gameExeNewTipWidthLookup + 0x13);
+  scanCreateEnableHook("game", "tipAltTitleWidthLookup",
+                       &gameExeTipAltTitleWidthLookup,
+                       tipAltTitleWidthLookupHook, NULL);
+  gameExeTipAltTitleWidthLookupReturn =
+      (uintptr_t)((uint8_t *)gameExeTipAltTitleWidthLookup + 0x18);
 
   FILE *widthsfile = fopen("languagebarrier\\widths.bin", "rb");
   fread(widths, 1, TOTAL_NUM_CHARACTERS, widthsfile);

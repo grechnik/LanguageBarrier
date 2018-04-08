@@ -76,6 +76,16 @@
             "offset": 0,
             "occurrence": 0
         },
+        "newTipWidthLookup": {
+            "pattern": "81 FA ?? ?? ?? ?? 73 ?? 85 FF 74 11 0F B6 BA ?? ?? ?? ?? 8B C7 0F AF C3 C1 E8 05 EB",
+            "offset": 0,
+            "occurrence": 0
+        },
+        "tipAltTitleWidthLookup": {
+            "pattern": "81 FA ?? ?? ?? ?? 73 ?? 83 BD ?? ?? ?? ?? 00 74 ?? 0F B6 8A ?? ?? ?? ?? 0F AF 4D 18 8B B5 ?? ?? ?? ?? C1 E9 05",
+            "offset": 0,
+            "occurrence": 0
+        },
         "dialogueSetLineBreakFlags": {
             "pattern": "8D 4E 80 83 F9 3D 77 1E 8D 4A 80 83 F9 3D 77 07 80 88 ?? ?? ?? ?? 09 8D 4F 80 83 F9 3D 77 07 80 88 ?? ?? ?? ?? 0A",
             "offset": 0,
