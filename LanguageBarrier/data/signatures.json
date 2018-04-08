@@ -66,13 +66,8 @@
             "offset": 0,
             "occurrence": 0
         },
-        "getVisibleLinksWidthLookup1": {
-            "pattern": "81 FA 80 00 00 00 73 0A 85 D2 74 06 8B CB D1 E9 EB 30 81 FA ?? ?? ?? ?? 73 0F 0F B6 8A ?? ?? ?? ?? 0F AF CB C1 E9 05 EB 19",
-            "offset": 0,
-            "occurrence": 0
-        },
-        "getVisibleLinksWidthLookup2": {
-            "pattern": "81 FA 80 00 00 00 73 0A 85 D2 74 06 8B CB D1 E9 EB 30 81 FA ?? ?? ?? ?? 73 0F 0F B6 8A ?? ?? ?? ?? 0F AF CB C1 E9 05 EB 19",
+        "getVisibleLinks": {
+            "pattern": "55 8B EC 81 EC ?? ?? ?? ?? A1 ?? ?? ?? ?? 33 C5 89 45 FC 8B 4D 1C 8B 45 0C",
             "offset": 0,
             "occurrence": 0
         },
