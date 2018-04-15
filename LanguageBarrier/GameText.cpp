@@ -766,6 +766,7 @@ int __cdecl getLinksFromSc3StringHook(int xOffset, int yOffset, int lineLength,
   ProcessedSc3String_t str;
 
   if (!lineLength) lineLength = DEFAULT_LINE_LENGTH;
+  lineLength -= 2; // see the comment in getSc3StringLineCountHook
 
   std::list<StringWord_t> words;
   semiTokeniseSc3String(sc3string, words, baseGlyphSize, lineLength);
@@ -776,16 +777,27 @@ int __cdecl getLinksFromSc3StringHook(int xOffset, int yOffset, int lineLength,
                       str.curLinkNumber, str.curColor);
 
   int j = 0;
+  int processedChars = 0;
   for (int i = 0; i < str.length; i++) {
     if (str.linkNumber[i] != NOT_A_LINK) {
-      result[j].linkNumber = str.linkNumber[i];
-      result[j].displayX = str.displayStartX[i];
-      result[j].displayY = str.displayStartY[i];
-      result[j].displayWidth = str.displayEndX[i] - str.displayStartX[i];
-      result[j].displayHeight = str.displayEndY[i] - str.displayStartY[i];
+      // merge consequent characters in one rectangle; the engine has the limit of 20 rectangles per link
+      if (j && str.linkNumber[i] == result[j - 1].linkNumber
+            && str.displayStartX[i] == result[j - 1].displayX + result[j - 1].displayWidth
+            && str.displayStartY[i] == result[j - 1].displayY
+            && str.displayEndY[i] == result[j - 1].displayY + result[j - 1].displayHeight)
+      {
+        result[j - 1].displayWidth = str.displayEndX[i] - result[j - 1].displayX;
+      } else {
+        result[j].linkNumber = str.linkNumber[i];
+        result[j].displayX = str.displayStartX[i];
+        result[j].displayY = str.displayStartY[i];
+        result[j].displayWidth = str.displayEndX[i] - str.displayStartX[i];
+        result[j].displayHeight = str.displayEndY[i] - str.displayStartY[i];
+        j++;
+      }
 
-      j++;
-      if (j >= str.linkCharCount) return str.linkCharCount;
+      processedChars++;
+      if (processedChars >= str.linkCharCount) break;
     }
   }
   return j;
