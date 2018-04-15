@@ -298,7 +298,8 @@ void processSc3TokenList(int xOffset, int yOffset, int lineLength,
                          int color, int baseGlyphSize,
                          ProcessedSc3String_t *result, bool measureOnly,
                          float multiplier, int lastLinkNumber,
-                         int curLinkNumber, int currentColor);
+                         int curLinkNumber, int currentColor,
+                         bool truncateExcessWord = false);
 int __cdecl getSc3StringDisplayWidthHook(const char *sc3string,
                                          unsigned int maxCharacters,
                                          int baseGlyphSize);
@@ -586,7 +587,8 @@ void processSc3TokenList(int xOffset, int yOffset, int lineLength,
                          int color, int baseGlyphSize,
                          ProcessedSc3String_t *result, bool measureOnly,
                          float multiplier, int lastLinkNumber,
-                         int curLinkNumber, int currentColor) {
+                         int curLinkNumber, int currentColor,
+                         bool truncateExcessWord) {
   Sc3_t sc3;
   int sc3evalResult;
 
@@ -615,10 +617,12 @@ void processSc3TokenList(int xOffset, int yOffset, int lineLength,
         it->cost -
         ((curLineLength == 0 && it->startsWithSpace == true) ? spaceCost : 0);
     if (curLineLength + wordCost > lineLength) {
-      if (curLineLength != 0 && it->startsWithSpace == true)
-        wordCost -= spaceCost;
-      result->lines++;
-      curLineLength = 0;
+      if (!(truncateExcessWord && result->lines + 1 == lineCount)) {
+        if (curLineLength != 0 && it->startsWithSpace == true)
+          wordCost -= spaceCost;
+        result->lines++;
+        curLineLength = 0;
+      }
     }
     if (result->lines >= lineCount) {
       words.erase(words.begin(), it);
@@ -668,6 +672,11 @@ void processSc3TokenList(int xOffset, int yOffset, int lineLength,
           }
           uint16_t glyphWidth =
               (baseGlyphSize * widths[glyphId]) / FONT_CELL_WIDTH;
+          if (curLineLength + glyphWidth > lineLength) {
+            // possible only for the last word if truncateExcessWord
+            result->lines++;
+            goto afterWord;
+          }
           curLineLength += glyphWidth;
           if (!measureOnly) {
             // anything that's part of an array needs to go here, otherwise we
@@ -716,6 +725,8 @@ int __cdecl drawPhoneTextHook(int textureId, int xOffset, int yOffset,
 
   if (!lineLength) lineLength = DEFAULT_LINE_LENGTH;
 
+  bool truncateExcessWord = (lineSkipCount == 0 && lineDisplayCount == 1);
+
   std::list<StringWord_t> words;
   semiTokeniseSc3String(sc3string, words, baseGlyphSize, lineLength);
   processSc3TokenList(xOffset, yOffset, lineLength, words, lineSkipCount, color,
@@ -723,7 +734,7 @@ int __cdecl drawPhoneTextHook(int textureId, int xOffset, int yOffset,
                       NOT_A_LINK, color);
   processSc3TokenList(xOffset, yOffset, lineLength, words, lineDisplayCount,
                       color, baseGlyphSize, &str, false, COORDS_MULTIPLIER,
-                      str.linkCount - 1, str.curLinkNumber, str.curColor);
+                      str.linkCount - 1, str.curLinkNumber, str.curColor, truncateExcessWord);
 
   for (int i = 0; i < str.length; i++) {
     gameExeDrawGlyph(textureId, str.textureStartX[i], str.textureStartY[i],
