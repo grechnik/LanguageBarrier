@@ -351,13 +351,15 @@ void gameTextInit() {
   gameExeBacklogHighlightHeight =
       (uint8_t *)sigScan("game", "backlogHighlightHeight");
 
-  // gameExeBacklogHighlightHeight is (negative) offset (from vertical end of
-  // glyph):
-  // add eax,-0x22 (83 C0 DE) -> add eax,-0x17 (83 C0 E9)
-  DWORD oldProtect;
-  VirtualProtect(gameExeBacklogHighlightHeight, 1, PAGE_READWRITE, &oldProtect);
-  *gameExeBacklogHighlightHeight = 0xE9;
-  VirtualProtect(gameExeBacklogHighlightHeight, 1, oldProtect, &oldProtect);
+  if (gameExeBacklogHighlightHeight) {
+    // gameExeBacklogHighlightHeight is (negative) offset (from vertical end of
+    // glyph):
+    // add eax,-0x22 (83 C0 DE) -> add eax,-0x17 (83 C0 E9)
+    DWORD oldProtect;
+    VirtualProtect(gameExeBacklogHighlightHeight, 1, PAGE_READWRITE, &oldProtect);
+    *gameExeBacklogHighlightHeight = 0xE9;
+    VirtualProtect(gameExeBacklogHighlightHeight, 1, oldProtect, &oldProtect);
+  }
 
   scanCreateEnableHook(
       "game", "drawDialogue", (uintptr_t *)&gameExeDrawDialogue,
