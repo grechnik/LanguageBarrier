@@ -11,7 +11,7 @@ typedef struct __declspec(align(4)) {
   char gap0[316];
   int somePageNumber;
   char gap140[12];
-  char *pString;
+  const char *pString;
 } Sc3_t;
 
 // this is my own, not from the game
@@ -38,8 +38,8 @@ typedef struct {
 
 // also my own
 typedef struct {
-  char *start;
-  char *end;
+  const char *start;
+  const char *end;
   uint16_t cost;
   bool startsWithSpace;
   bool endsWithLinebreak;
@@ -132,7 +132,7 @@ static DrawPhoneTextProc gameExeDrawPhoneText =
     NULL;  // = (DrawPhoneTextProc)0x444F70;
 static DrawPhoneTextProc gameExeDrawPhoneTextReal = NULL;
 
-typedef int(__cdecl *GetSc3StringDisplayWidthProc)(char *string,
+typedef int(__cdecl *GetSc3StringDisplayWidthProc)(const char *string,
                                                    unsigned int maxCharacters,
                                                    int baseGlyphSize);
 static GetSc3StringDisplayWidthProc gameExeGetSc3StringDisplayWidthFont1 =
@@ -179,6 +179,11 @@ typedef int(__cdecl *GetSc3StringLineCountProc)(int lineLength, char *sc3string,
 static GetSc3StringLineCountProc gameExeGetSc3StringLineCount =
     NULL;  // = (GetSc3StringLineCountProc)0x442790;
 static GetSc3StringLineCountProc gameExeGetSc3StringLineCountReal = NULL;
+typedef void(__cdecl *GetVisibleLinksProc)(
+    unsigned lineLength, const char *sc3string,
+    unsigned lineSkipCount, unsigned lineDisplayCount,
+    unsigned baseGlyphSize, char *result);
+static GetVisibleLinksProc gameExeGetVisibleLinks = NULL;
 
 static uintptr_t gameExeDialogueLayoutWidthLookup1 = NULL;
 static uintptr_t gameExeDialogueLayoutWidthLookup1Return = NULL;
@@ -188,6 +193,10 @@ static uintptr_t gameExeDialogueLayoutWidthLookup3 = NULL;
 static uintptr_t gameExeDialogueLayoutWidthLookup3Return = NULL;
 static uintptr_t gameExeTipsListWidthLookup = NULL;
 static uintptr_t gameExeTipsListWidthLookupReturn = NULL;
+static uintptr_t gameExeNewTipWidthLookup = NULL;
+static uintptr_t gameExeNewTipWidthLookupReturn = NULL;
+static uintptr_t gameExeTipAltTitleWidthLookup = NULL;
+static uintptr_t gameExeTipAltTitleWidthLookupReturn = NULL;
 static uintptr_t gameExeDialogueSetLineBreakFlags = NULL;
 static uintptr_t gameExeDialogueSetLineBreakFlagsReturn = NULL;
 
@@ -239,6 +248,20 @@ __declspec(naked) void tipsListWidthLookupHook() {
   }
 }
 
+__declspec(naked) void newTipWidthLookupHook() {
+  __asm {
+    movzx edi, widths[edx]
+    jmp gameExeNewTipWidthLookupReturn
+  }
+}
+
+__declspec(naked) void tipAltTitleWidthLookupHook() {
+  __asm {
+    movzx ecx, widths[edx]
+    jmp gameExeTipAltTitleWidthLookupReturn
+  }
+}
+
 __declspec(naked) void dialogueSetLineBreakFlagsHook() {
   __asm {
     test charFlags[esi], 1
@@ -268,15 +291,16 @@ int __cdecl drawPhoneTextHook(int textureId, int xOffset, int yOffset,
                               int lineLength, char *sc3string,
                               int lineSkipCount, int lineDisplayCount,
                               int color, int baseGlyphSize, int opacity);
-void semiTokeniseSc3String(char *sc3string, std::list<StringWord_t> &words,
+void semiTokeniseSc3String(const char *sc3string, std::list<StringWord_t> &words,
                            int baseGlyphSize, int lineLength);
 void processSc3TokenList(int xOffset, int yOffset, int lineLength,
                          std::list<StringWord_t> &words, int lineCount,
                          int color, int baseGlyphSize,
                          ProcessedSc3String_t *result, bool measureOnly,
                          float multiplier, int lastLinkNumber,
-                         int curLinkNumber, int currentColor);
-int __cdecl getSc3StringDisplayWidthHook(char *sc3string,
+                         int curLinkNumber, int currentColor,
+                         bool truncateExcessWord = false);
+int __cdecl getSc3StringDisplayWidthHook(const char *sc3string,
                                          unsigned int maxCharacters,
                                          int baseGlyphSize);
 int __cdecl getLinksFromSc3StringHook(int xOffset, int yOffset, int lineLength,
@@ -295,6 +319,9 @@ int __cdecl drawLinkHighlightHook(int xOffset, int yOffset, int lineLength,
                                   unsigned int lineDisplayCount, int color,
                                   unsigned int baseGlyphSize, int opacity,
                                   int selectedLink);
+void __cdecl getVisibleLinksHook(unsigned lineLength, const char *sc3string,
+                                 unsigned lineSkipCount, unsigned lineDisplayCount,
+                                 unsigned baseGlyphSize, char *result);
 int __cdecl getSc3StringLineCountHook(int lineLength, char *sc3string,
                                       unsigned int baseGlyphSize);
 // There are a bunch more functions like these but I haven't seen them get hit
@@ -324,13 +351,15 @@ void gameTextInit() {
   gameExeBacklogHighlightHeight =
       (uint8_t *)sigScan("game", "backlogHighlightHeight");
 
-  // gameExeBacklogHighlightHeight is (negative) offset (from vertical end of
-  // glyph):
-  // add eax,-0x22 (83 C0 DE) -> add eax,-0x17 (83 C0 E9)
-  DWORD oldProtect;
-  VirtualProtect(gameExeBacklogHighlightHeight, 1, PAGE_READWRITE, &oldProtect);
-  *gameExeBacklogHighlightHeight = 0xE9;
-  VirtualProtect(gameExeBacklogHighlightHeight, 1, oldProtect, &oldProtect);
+  if (gameExeBacklogHighlightHeight) {
+    // gameExeBacklogHighlightHeight is (negative) offset (from vertical end of
+    // glyph):
+    // add eax,-0x22 (83 C0 DE) -> add eax,-0x17 (83 C0 E9)
+    DWORD oldProtect;
+    VirtualProtect(gameExeBacklogHighlightHeight, 1, PAGE_READWRITE, &oldProtect);
+    *gameExeBacklogHighlightHeight = 0xE9;
+    VirtualProtect(gameExeBacklogHighlightHeight, 1, oldProtect, &oldProtect);
+  }
 
   scanCreateEnableHook(
       "game", "drawDialogue", (uintptr_t *)&gameExeDrawDialogue,
@@ -367,6 +396,10 @@ void gameTextInit() {
   scanCreateEnableHook(
       "game", "drawLinkHighlight", (uintptr_t *)&gameExeDrawLinkHighlight,
       (LPVOID)drawLinkHighlightHook, (LPVOID *)&gameExeDrawLinkHighlightReal);
+  scanCreateEnableHook("game", "getVisibleLinks",
+                       (uintptr_t *)&gameExeGetVisibleLinks,
+                       (LPVOID)getVisibleLinksHook,
+                       NULL);
   scanCreateEnableHook("game", "getSc3StringLineCount",
                        (uintptr_t *)&gameExeGetSc3StringLineCount,
                        (LPVOID)getSc3StringLineCountHook,
@@ -410,6 +443,16 @@ void gameTextInit() {
       (uint8_t *)(*(uint32_t *)((uint8_t *)gameExeDialogueSetLineBreakFlags + 0x12));
   gameExeDialogueSetLineBreakFlagsReturn =
       (uintptr_t)((uint8_t *)gameExeDialogueSetLineBreakFlags + 0x26);
+  scanCreateEnableHook("game", "newTipWidthLookup",
+                       &gameExeNewTipWidthLookup,
+                       newTipWidthLookupHook, NULL);
+  gameExeNewTipWidthLookupReturn =
+      (uintptr_t)((uint8_t *)gameExeNewTipWidthLookup + 0x13);
+  scanCreateEnableHook("game", "tipAltTitleWidthLookup",
+                       &gameExeTipAltTitleWidthLookup,
+                       tipAltTitleWidthLookupHook, NULL);
+  gameExeTipAltTitleWidthLookupReturn =
+      (uintptr_t)((uint8_t *)gameExeTipAltTitleWidthLookup + 0x18);
 
   FILE *widthsfile = fopen("languagebarrier\\widths.bin", "rb");
   fread(widths, 1, TOTAL_NUM_CHARACTERS, widthsfile);
@@ -488,7 +531,7 @@ void __cdecl drawDialogue2Hook(int fontNumber, int pageNumber,
   drawDialogueHook(fontNumber, pageNumber, opacity, 0, 0);
 }
 
-void semiTokeniseSc3String(char *sc3string, std::list<StringWord_t> &words,
+void semiTokeniseSc3String(const char *sc3string, std::list<StringWord_t> &words,
                            int baseGlyphSize, int lineLength) {
   lineLength -= 2 * PHONE_X_PADDING;
 
@@ -521,13 +564,13 @@ void semiTokeniseSc3String(char *sc3string, std::list<StringWord_t> &words,
         break;
       default:
         int glyphId = (uint8_t)sc3string[1] + ((c & 0x7f) << 8);
+        int glyphWidth = (baseGlyphSize * widths[glyphId]) / FONT_CELL_WIDTH;
         if (glyphId == GLYPH_ID_FULLWIDTH_SPACE ||
             glyphId == GLYPH_ID_HALFWIDTH_SPACE) {
           word.end = sc3string - 1;
           words.push_back(word);
-          word = {sc3string, NULL, widths[glyphId], true, false};
+          word = {sc3string, NULL, (uint16_t)glyphWidth, true, false};
         } else {
-          int glyphWidth = (baseGlyphSize * widths[glyphId]) / FONT_CELL_WIDTH;
           if (word.cost + glyphWidth > lineLength) {
             word.end = sc3string - 1;
             words.push_back(word);
@@ -546,7 +589,8 @@ void processSc3TokenList(int xOffset, int yOffset, int lineLength,
                          int color, int baseGlyphSize,
                          ProcessedSc3String_t *result, bool measureOnly,
                          float multiplier, int lastLinkNumber,
-                         int curLinkNumber, int currentColor) {
+                         int curLinkNumber, int currentColor,
+                         bool truncateExcessWord) {
   Sc3_t sc3;
   int sc3evalResult;
 
@@ -575,10 +619,12 @@ void processSc3TokenList(int xOffset, int yOffset, int lineLength,
         it->cost -
         ((curLineLength == 0 && it->startsWithSpace == true) ? spaceCost : 0);
     if (curLineLength + wordCost > lineLength) {
-      if (curLineLength != 0 && it->startsWithSpace == true)
-        wordCost -= spaceCost;
-      result->lines++;
-      curLineLength = 0;
+      if (!(truncateExcessWord && result->lines + 1 == lineCount)) {
+        if (curLineLength != 0 && it->startsWithSpace == true)
+          wordCost -= spaceCost;
+        result->lines++;
+        curLineLength = 0;
+      }
     }
     if (result->lines >= lineCount) {
       words.erase(words.begin(), it);
@@ -586,9 +632,9 @@ void processSc3TokenList(int xOffset, int yOffset, int lineLength,
     };
 
     char c;
-    char *sc3string = (curLineLength == 0 && it->startsWithSpace == true)
-                          ? it->start + 2
-                          : it->start;
+    const char *sc3string = (curLineLength == 0 && it->startsWithSpace == true)
+                                ? it->start + 2
+                                : it->start;
     while (sc3string <= it->end) {
       c = *sc3string;
       switch (c) {
@@ -628,6 +674,11 @@ void processSc3TokenList(int xOffset, int yOffset, int lineLength,
           }
           uint16_t glyphWidth =
               (baseGlyphSize * widths[glyphId]) / FONT_CELL_WIDTH;
+          if (curLineLength + glyphWidth > lineLength) {
+            // possible only for the last word if truncateExcessWord
+            result->lines++;
+            goto afterWord;
+          }
           curLineLength += glyphWidth;
           if (!measureOnly) {
             // anything that's part of an array needs to go here, otherwise we
@@ -662,10 +713,6 @@ void processSc3TokenList(int xOffset, int yOffset, int lineLength,
   }
 
   if (curLineLength == 0) result->lines--;
-  // For some reason we come up one line too short for some mails (e.g. Moeka's
-  // first). Unfortunately, this workaround also adds a blank line below mail
-  // subjects, but it's better than having them be unreadable.
-  result->lines++;
 
   result->linkCount = lastLinkNumber + 1;
   result->curColor = currentColor;
@@ -680,6 +727,8 @@ int __cdecl drawPhoneTextHook(int textureId, int xOffset, int yOffset,
 
   if (!lineLength) lineLength = DEFAULT_LINE_LENGTH;
 
+  bool truncateExcessWord = (lineSkipCount == 0 && lineDisplayCount == 1);
+
   std::list<StringWord_t> words;
   semiTokeniseSc3String(sc3string, words, baseGlyphSize, lineLength);
   processSc3TokenList(xOffset, yOffset, lineLength, words, lineSkipCount, color,
@@ -687,7 +736,7 @@ int __cdecl drawPhoneTextHook(int textureId, int xOffset, int yOffset,
                       NOT_A_LINK, color);
   processSc3TokenList(xOffset, yOffset, lineLength, words, lineDisplayCount,
                       color, baseGlyphSize, &str, false, COORDS_MULTIPLIER,
-                      str.linkCount - 1, str.curLinkNumber, str.curColor);
+                      str.linkCount - 1, str.curLinkNumber, str.curColor, truncateExcessWord);
 
   for (int i = 0; i < str.length; i++) {
     gameExeDrawGlyph(textureId, str.textureStartX[i], str.textureStartY[i],
@@ -699,7 +748,7 @@ int __cdecl drawPhoneTextHook(int textureId, int xOffset, int yOffset,
   return str.lines;
 }
 
-int __cdecl getSc3StringDisplayWidthHook(char *sc3string,
+int __cdecl getSc3StringDisplayWidthHook(const char *sc3string,
                                          unsigned int maxCharacters,
                                          int baseGlyphSize) {
   if (!maxCharacters) maxCharacters = DEFAULT_MAX_CHARACTERS;
@@ -730,6 +779,7 @@ int __cdecl getLinksFromSc3StringHook(int xOffset, int yOffset, int lineLength,
   ProcessedSc3String_t str;
 
   if (!lineLength) lineLength = DEFAULT_LINE_LENGTH;
+  lineLength -= 2; // see the comment in getSc3StringLineCountHook
 
   std::list<StringWord_t> words;
   semiTokeniseSc3String(sc3string, words, baseGlyphSize, lineLength);
@@ -740,16 +790,27 @@ int __cdecl getLinksFromSc3StringHook(int xOffset, int yOffset, int lineLength,
                       str.curLinkNumber, str.curColor);
 
   int j = 0;
+  int processedChars = 0;
   for (int i = 0; i < str.length; i++) {
     if (str.linkNumber[i] != NOT_A_LINK) {
-      result[j].linkNumber = str.linkNumber[i];
-      result[j].displayX = str.displayStartX[i];
-      result[j].displayY = str.displayStartY[i];
-      result[j].displayWidth = str.displayEndX[i] - str.displayStartX[i];
-      result[j].displayHeight = str.displayEndY[i] - str.displayStartY[i];
+      // merge consequent characters in one rectangle; the engine has the limit of 20 rectangles per link
+      if (j && str.linkNumber[i] == result[j - 1].linkNumber
+            && str.displayStartX[i] == result[j - 1].displayX + result[j - 1].displayWidth
+            && str.displayStartY[i] == result[j - 1].displayY
+            && str.displayEndY[i] == result[j - 1].displayY + result[j - 1].displayHeight)
+      {
+        result[j - 1].displayWidth = str.displayEndX[i] - result[j - 1].displayX;
+      } else {
+        result[j].linkNumber = str.linkNumber[i];
+        result[j].displayX = str.displayStartX[i];
+        result[j].displayY = str.displayStartY[i];
+        result[j].displayWidth = str.displayEndX[i] - str.displayStartX[i];
+        result[j].displayHeight = str.displayEndY[i] - str.displayStartY[i];
+        j++;
+      }
 
-      j++;
-      if (j >= str.linkCharCount) return str.linkCharCount;
+      processedChars++;
+      if (processedChars >= str.linkCharCount) break;
     }
   }
   return j;
@@ -829,11 +890,45 @@ int __cdecl drawLinkHighlightHook(int xOffset, int yOffset, int lineLength,
   return str.lines;
 }
 
+// This is used to process keyboard up/down arrows in mails,
+// moving to the next/prev link or scrolling depending on results
+void __cdecl getVisibleLinksHook(unsigned lineLength, const char *sc3string,
+	unsigned lineSkipCount, unsigned lineDisplayCount,
+	unsigned baseGlyphSize, char *result)
+{
+	ProcessedSc3String_t str;
+	if (!lineLength) lineLength = DEFAULT_LINE_LENGTH;
+	lineLength -= 2; // see the comment in getSc3StringLineCountHook
+
+	std::list<StringWord_t> words;
+	semiTokeniseSc3String(sc3string, words, baseGlyphSize, lineLength);
+	processSc3TokenList(0, 0, lineLength, words, lineSkipCount, 0,
+		baseGlyphSize, &str, true, COORDS_MULTIPLIER, -1, NOT_A_LINK, 0);
+	size_t firstVisibleLink = (str.curLinkNumber == NOT_A_LINK ? str.linkCount : str.curLinkNumber);
+	processSc3TokenList(0, 0, lineLength, words, lineDisplayCount, 0,
+		baseGlyphSize, &str, true, COORDS_MULTIPLIER, str.linkCount - 1, str.curLinkNumber, str.curColor);
+	for (size_t i = firstVisibleLink; i < str.linkCount; i++)
+		result[i] = 1;
+}
+
 // This is used to set bounds for scrolling
 int __cdecl getSc3StringLineCountHook(int lineLength, char *sc3string,
                                       unsigned int baseGlyphSize) {
   ProcessedSc3String_t str;
   if (!lineLength) lineLength = DEFAULT_LINE_LENGTH;
+
+  // The game calls getSc3StringLineCount() with lineLength == 0xFE for mail subject
+  // and lineLength == 0x116 for mail body;
+  // after that, the game calls drawPhoneTextHook with lineLength == 0xFC and 0x114 respectively.
+  // The difference is probably not important for the in-game fixed-width font,
+  // but once in a while it changes the layout generated by our algorithm.
+  //
+  // Note: if they will actually fix the arguments in the game,
+  // we will operate with less-than-needed lines, and
+  // this code could occasionally generate an extra empty line;
+  // this is acceptable unlike an inaccessible last line that happens
+  // if we operate with greater-than-needed lines.
+  lineLength -= 2;
 
   std::list<StringWord_t> words;
   semiTokeniseSc3String(sc3string, words, baseGlyphSize, lineLength);
