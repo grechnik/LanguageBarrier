@@ -1,6 +1,7 @@
 #include "LanguageBarrier.h"
 #include <ctime>
 #include <fstream>
+#include <iomanip>
 #include "MinHook.h"
 #include "Config.h"
 #include "Game.h"

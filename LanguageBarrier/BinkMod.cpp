@@ -4,7 +4,7 @@
 #include "Config.h"
 #include "Game.h"
 #include <csri/csri.h>
-#include <xmmintrin.h>
+#include <emmintrin.h>
 
 // partial
 typedef struct BINK {
