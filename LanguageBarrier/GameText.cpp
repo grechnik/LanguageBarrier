@@ -1,7 +1,5 @@
 #include "GameText.h"
-#include <fstream>
 #include <list>
-#include <sstream>
 #include <vector>
 #include "Game.h"
 #include "LanguageBarrier.h"
@@ -212,7 +210,7 @@ static uint8_t *gameExeLineBreakFlags = NULL;
 static uint8_t widths[lb::TOTAL_NUM_CHARACTERS];
 static uint8_t charFlags[lb::TOTAL_NUM_CHARACTERS];
 
-static std::string *outlineBuffer;
+static std::string outlineBuffer;
 
 // MSVC doesn't like having these inside namespaces
 __declspec(naked) void dialogueLayoutWidthLookup1Hook() {
@@ -331,16 +329,10 @@ int __cdecl getSc3StringLineCountHook(int lineLength, char *sc3string,
 // Western translations) it considers full-width)
 
 void gameTextInit() {
-  std::ifstream in("languagebarrier\\font-outline.png",
-                   std::ios::in | std::ios::binary);
-  in.seekg(0, std::ios::end);
-  outlineBuffer = new std::string(in.tellg(), 0);
-  in.seekg(0, std::ios::beg);
-  in.read(&((*outlineBuffer)[0]), outlineBuffer->size());
-  in.close();
+  outlineBuffer = slurpFile("languagebarrier\\font-outline.png");
   // gee I sure hope nothing important ever goes in OUTLINE_TEXTURE_ID...
-  gameLoadTexture(OUTLINE_TEXTURE_ID, &((*outlineBuffer)[0]),
-                  outlineBuffer->size());
+  gameLoadTexture(OUTLINE_TEXTURE_ID, &(outlineBuffer[0]),
+                  outlineBuffer.size());
   // the game loads this asynchronously - I'm not sure how to be notified it's
   // done and I can free the buffer
   // so I'll just do it in a hook
@@ -474,11 +466,8 @@ void gameTextInit() {
 int __cdecl dialogueLayoutRelatedHook(int unk0, int *unk1, int *unk2, int unk3,
                                       int unk4, int unk5, int unk6, int yOffset,
                                       int lineHeight) {
-  if (outlineBuffer != NULL) {
-    // let's just do this here, should be loaded by now...
-    delete outlineBuffer;
-    outlineBuffer = NULL;
-  }
+  // let's just do this here, should be loaded by now...
+  outlineBuffer = std::string{};
 
   return gameExeDialogueLayoutRelatedReal(
       unk0, unk1, unk2, unk3, unk4, unk5, unk6,

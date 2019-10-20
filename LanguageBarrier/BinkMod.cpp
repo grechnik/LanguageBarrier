@@ -92,9 +92,7 @@ bool binkModInit() {
     return false;
 
   for (auto font : Config::fmv().j["fonts"]) {
-    std::stringstream ss;
-    ss << "languagebarrier\\subs\\fonts\\" << font.get<std::string>();
-    std::string path = ss.str();
+    std::string path = "languagebarrier\\subs\\fonts\\" + font.get<std::string>();
     AddFontResourceExA(path.c_str(), FR_PRIVATE, NULL);
   }
 
@@ -140,26 +138,17 @@ BINK* __stdcall BinkOpenHook(const char* name, uint32_t flags) {
     subFileName = Config::fmv().j["subs"]["lqKaraoke"][tmp].get<std::string>();
 
   if (!subFileName.empty()) {
-    std::stringstream ssSubPath;
-    ssSubPath << "languagebarrier\\subs\\" << subFileName;
-    std::string subPath = ssSubPath.str();
-    std::stringstream logstr;
-    logstr << "Using sub track " << subPath << " if available.";
-    LanguageBarrierLog(logstr.str());
+    std::string subPath = "languagebarrier\\subs\\" + subFileName;
+    LanguageBarrierLog("Using sub track " + subPath + " if available.");
 
     // tried csri_open_file(), didn't work, not sure why. Not like it's a big
     // deal, anyway.
-    std::ifstream in(subPath, std::ios::in | std::ios::binary);
-    if (in.good()) {
-      in.seekg(0, std::ios::end);
-      std::string sub(in.tellg(), 0);
-      in.seekg(0, std::ios::beg);
-      in.read(&sub[0], sub.size());
-
+    try {
+      std::string sub = slurpFile(subPath);
       state->csri =
           csri_open_mem(csri_renderer_default(), &sub[0], sub.size(), NULL);
+    } catch (...) {
     }
-    in.close();
   }
 
   return bnk;

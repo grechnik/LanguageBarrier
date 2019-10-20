@@ -129,13 +129,7 @@ const char *__cdecl getStringFromScriptHook(int scriptId, int stringId);
 int __fastcall closeAllSystemsHook(void *pThis, void *EDX);
 
 void gameInit() {
-  std::ifstream in("languagebarrier\\stringReplacementTable.bin",
-                   std::ios::in | std::ios::binary);
-  in.seekg(0, std::ios::end);
-  stringReplacementTable.resize(in.tellg());
-  in.seekg(0, std::ios::beg);
-  in.read(&stringReplacementTable[0], stringReplacementTable.size());
-  in.close();
+  stringReplacementTable = slurpFile("languagebarrier\\stringReplacementTable.bin");
 
   // TODO: maybe just scan for all signatures inside SigScan?
   // auto-initialisation, similarly to Config.h
@@ -190,12 +184,10 @@ void gameInit() {
 int __cdecl earlyInitHook(int unk0, int unk1) {
   int retval = gameExeEarlyInitReal(unk0, unk1);
 
-  std::stringstream ssMpk;
   CHAR path[MAX_PATH], drive[_MAX_DRIVE], dir[_MAX_DIR];
   GetModuleFileNameA(NULL, path, MAX_PATH);
   _splitpath_s(path, drive, _MAX_DRIVE, dir, _MAX_DIR, NULL, 0, NULL, 0);
-  ssMpk << drive << "\\" << dir << "languagebarrier";
-  std::string lbDir = ssMpk.str();
+  std::string lbDir = std::string(drive) + "\\" + dir + "languagebarrier";
 
   c0dataMpk = gameMountMpk("C0DATA", &lbDir[0], "c0data.mpk");
   LanguageBarrierLog("c0data.mpk mounted");
@@ -229,11 +221,10 @@ int __cdecl earlyInitHook(int unk0, int unk1) {
 int __fastcall mpkFopenByIdHook(void *pThis, void *EDX, void *mpkObject,
                                 int fileId, int unk3) {
   uint8_t *mpkFilename = (uint8_t *)mpkObject + 1;
-  std::stringstream logstr;
-  logstr << "mpkFopenById(" << mpkFilename << ".mpk, 0x" << std::hex << fileId
-         << ")" << std::dec;
+  char buffer[64];
+  std::string logstr = "mpkFopenById(" + std::string((const char*)mpkFilename) + ".mpk, 0x" + _itoa(fileId, buffer, 16) + ")";
 #ifdef _DEBUG
-  LanguageBarrierLog(logstr.str());
+  LanguageBarrierLog(logstr);
 #endif
 
   std::vector<std::string> categories;
@@ -252,8 +243,9 @@ int __fastcall mpkFopenByIdHook(void *pThis, void *EDX, void *mpkObject,
       if (Config::fileredirection().j[i][(char *)mpkFilename].count(key) == 1) {
         int newFileId =
             Config::fileredirection().j[i][(char *)mpkFilename][key].get<int>();
-        logstr << " redirected to c0data.mpk, 0x" << std::hex << newFileId;
-        LanguageBarrierLog(logstr.str());
+        logstr += " redirected to c0data.mpk, 0x";
+        logstr += _itoa(newFileId, buffer, 16);
+        LanguageBarrierLog(logstr);
         return gameExeMpkFopenByIdReal(pThis, c0dataMpk, newFileId, unk3);
       }
     }
@@ -280,9 +272,7 @@ const char *__cdecl getStringFromScriptHook(int scriptId, int stringId) {
       std::string sStringId = std::to_string(stringId);
       if (targets[sFileId].count(sStringId) == 1) {
 #ifdef _DEBUG
-        std::stringstream logstr;
-        logstr << "redirecting string " << stringId << " in file " << fileId;
-        LanguageBarrierLog(logstr.str());
+        LanguageBarrierLog("redirecting string " + std::to_string(stringId) + " in file " + std::to_string(fileId));
 #endif
 
         uint32_t repId = targets[sFileId][sStringId].get<uint32_t>();
