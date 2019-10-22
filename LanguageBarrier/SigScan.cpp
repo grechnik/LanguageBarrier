@@ -147,7 +147,7 @@ uintptr_t sigScan(char* category, char* sigName, bool isData = false) {
         (unsigned char*)baseAddress,
         (unsigned char*)baseAddress + pSectionHdr->Misc.VirtualSize);
     uintptr_t retval =
-        (uintptr_t)FindPattern(rawData, pattern, baseAddress, offset, sig["occurrence"].get<int>());
+        (uintptr_t)FindPattern(rawData, pattern, baseAddress, offset, sig.value<int>("occurrence", 0));
 
     if (retval != NULL) {
       char buffer[64];
