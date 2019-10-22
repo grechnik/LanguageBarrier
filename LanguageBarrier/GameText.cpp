@@ -114,6 +114,37 @@ typedef void(__cdecl *DrawGlyphProc)(int textureId, float glyphInTextureStartX,
                                      float displayEndX, float displayEndY,
                                      int color, uint32_t opacity);
 static DrawGlyphProc gameExeDrawGlyph = NULL;  // = (DrawGlyphProc)0x42F950;
+static DrawGlyphProc gameExeDrawGlyphReal = NULL;
+
+typedef void(__cdecl *DrawGlyphMaskedProc)(int fontTextureId,
+                                           int maskTextureId,
+                                           float glyphInTextureStartX,
+                                           float glyphInTextureStartY,
+                                           float glyphInTextureWidth,
+                                           float glyphInTextureHeight,
+                                           float glyphInMaskStartX,
+                                           float glyphInMaskStartY,
+                                           float displayStartX,
+                                           float displayStartY,
+                                           float displayEndX,
+                                           float displayEndY,
+                                           int color, uint32_t opacity);
+static DrawGlyphMaskedProc gameExeDrawGlyphMasked = NULL;
+static DrawGlyphMaskedProc gameExeDrawGlyphMaskedReal = NULL;
+
+typedef void(__cdecl *DrawGlyphMaskedProc2)(int fontTextureId,
+                                            int maskTextureId,
+                                            float glyphInTextureStartX,
+                                            float glyphInTextureStartY,
+                                            float glyphInTextureWidth,
+                                            float glyphInTextureHeight,
+                                            float displayStartX,
+                                            float displayStartY,
+                                            float displayEndX,
+                                            float displayEndY,
+                                            int color, uint32_t opacity);
+static DrawGlyphMaskedProc2 gameExeDrawGlyphMasked2 = NULL;
+static DrawGlyphMaskedProc2 gameExeDrawGlyphMasked2Real = NULL;
 
 typedef int(__cdecl *DrawRectangleProc)(float X, float Y, float width,
                                         float height, int color,
@@ -210,7 +241,8 @@ static uint8_t *gameExeLineBreakFlags = NULL;
 static uint8_t widths[lb::TOTAL_NUM_CHARACTERS];
 static uint8_t charFlags[lb::TOTAL_NUM_CHARACTERS];
 
-static std::string outlineBuffer;
+static std::string fontBuffers[4];
+static bool hasSplitFont = false;
 
 // MSVC doesn't like having these inside namespaces
 __declspec(naked) void dialogueLayoutWidthLookup1Hook() {
@@ -278,6 +310,32 @@ nope:
 }
 
 namespace lb {
+void __cdecl drawGlyphHook(int textureId,
+                           float glyphInTextureStartX,
+                           float glyphInTextureStartY,
+                           float glyphInTextureWidth,
+                           float glyphInTextureHeight,
+                           float displayStartX, float displayStartY,
+                           float displayEndX, float displayEndY,
+                           int color, uint32_t opacity);
+void __cdecl drawGlyphMaskedHook(int fontTextureId, int maskTextureId,
+                                 float glyphInTextureStartX,
+                                 float glyphInTextureStartY,
+                                 float glyphInTextureWidth,
+                                 float glyphInTextureHeight,
+                                 float glyphInMaskStartX,
+                                 float glyphInMaskStartY,
+                                 float displayStartX, float displayStartY,
+                                 float displayEndX, float displayEndY,
+                                 int color, uint32_t opacity);
+void __cdecl drawGlyphMasked2Hook(int fontTextureId, int maskTextureId,
+                                  float glyphInTextureStartX,
+                                  float glyphInTextureStartY,
+                                  float glyphInTextureWidth,
+                                  float glyphInTextureHeight,
+                                  float displayStartX, float displayStartY,
+                                  float displayEndX, float displayEndY,
+                                  int color, uint32_t opacity);
 void __cdecl drawDialogueHook(int fontNumber, int pageNumber, uint32_t opacity,
                               int xOffset, int yOffset);
 void __cdecl drawDialogue2Hook(int fontNumber, int pageNumber,
@@ -329,15 +387,42 @@ int __cdecl getSc3StringLineCountHook(int lineLength, char *sc3string,
 // Western translations) it considers full-width)
 
 void gameTextInit() {
-  outlineBuffer = slurpFile("languagebarrier\\font-outline.png");
   // gee I sure hope nothing important ever goes in OUTLINE_TEXTURE_ID...
-  gameLoadTexture(OUTLINE_TEXTURE_ID, &(outlineBuffer[0]),
-                  outlineBuffer.size());
+  try {
+    // assigned texture ids should be consistent with fixTextureForSplitFont
+    fontBuffers[2] = slurpFile("languagebarrier\\font_a.png");
+    fontBuffers[3] = slurpFile("languagebarrier\\font_b.png");
+    fontBuffers[0] = slurpFile("languagebarrier\\font-outline_a.png");
+    fontBuffers[1] = slurpFile("languagebarrier\\font-outline_b.png");
+    hasSplitFont = true;
+    for (int i = 0; i < 4; i++) {
+      gameLoadTexture(OUTLINE_TEXTURE_ID + i, &(fontBuffers[i][0]), fontBuffers[i].size());
+    }
+    LanguageBarrierLog("split font loaded");
+  } catch (std::runtime_error&) {
+    LanguageBarrierLog("failed to load split font");
+  }
+  if (!hasSplitFont) {
+    fontBuffers[0] = slurpFile("languagebarrier\\font-outline.png");
+    gameLoadTexture(OUTLINE_TEXTURE_ID, &(fontBuffers[0][0]),
+                    fontBuffers[0].size());
+  }
   // the game loads this asynchronously - I'm not sure how to be notified it's
   // done and I can free the buffer
   // so I'll just do it in a hook
 
-  gameExeDrawGlyph = (DrawGlyphProc)sigScan("game", "drawGlyph");
+  if (hasSplitFont) {
+    scanCreateEnableHook(
+        "game", "drawGlyph", (uintptr_t *)&gameExeDrawGlyph,
+        (LPVOID)drawGlyphHook, (LPVOID *)&gameExeDrawGlyphReal);
+    scanCreateEnableHook(
+        "game", "drawGlyphMasked", (uintptr_t*)&gameExeDrawGlyphMasked,
+        (LPVOID)drawGlyphMaskedHook, (LPVOID*)&gameExeDrawGlyphMaskedReal);
+    scanCreateEnableHook("game", "drawGlyphMasked2", (uintptr_t*)&gameExeDrawGlyphMasked2,
+        (LPVOID)drawGlyphMasked2Hook, (LPVOID*)&gameExeDrawGlyphMasked2Real);
+  } else {
+    gameExeDrawGlyph = (DrawGlyphProc)sigScan("game", "drawGlyph");
+  }
   gameExeDrawRectangle = (DrawRectangleProc)sigScan("game", "drawRectangle");
   gameExeSc3Eval = (Sc3EvalProc)sigScan("game", "sc3Eval");
   gameExeBacklogHighlightHeight =
@@ -466,13 +551,87 @@ void gameTextInit() {
 int __cdecl dialogueLayoutRelatedHook(int unk0, int *unk1, int *unk2, int unk3,
                                       int unk4, int unk5, int unk6, int yOffset,
                                       int lineHeight) {
+  // release buffers
   // let's just do this here, should be loaded by now...
-  outlineBuffer = std::string{};
+  for (int i = 0; i < 4; i++)
+    fontBuffers[i] = std::string{};
 
   return gameExeDialogueLayoutRelatedReal(
       unk0, unk1, unk2, unk3, unk4, unk5, unk6,
       yOffset + DIALOGUE_REDESIGN_YOFFSET_SHIFT,
       lineHeight + DIALOGUE_REDESIGN_LINEHEIGHT_SHIFT);
+}
+
+static void fixTextureForSplitFont(int& textureId, float& y) {
+  bool shouldCorrect = false;
+  if (textureId == FIRST_FONT_ID || textureId == FIRST_FONT_ID + 1) {
+    textureId = OUTLINE_TEXTURE_ID + 2;
+    shouldCorrect = true;
+  } else if (textureId == OUTLINE_TEXTURE_ID) { // call from our own code
+    shouldCorrect = true;
+  }
+  if (shouldCorrect && y >= 4080) {
+    textureId++;
+    y -= 4080;
+  }
+}
+
+void __cdecl drawGlyphHook(int textureId,
+                           float glyphInTextureStartX,
+                           float glyphInTextureStartY,
+                           float glyphInTextureWidth,
+                           float glyphInTextureHeight,
+                           float displayStartX, float displayStartY,
+                           float displayEndX, float displayEndY,
+                           int color, uint32_t opacity) {
+  // this hook should be installed only if hasSplitFont is true
+  fixTextureForSplitFont(textureId, glyphInTextureStartY);
+  gameExeDrawGlyphReal(textureId, glyphInTextureStartX, glyphInTextureStartY,
+                       glyphInTextureWidth, glyphInTextureHeight,
+                       displayStartX, displayStartY, displayEndX, displayEndY,
+                       color, opacity);
+}
+
+// used for main text on Tips screen, decay effect for long texts at boundaries of view area
+// maskTextureId is always 0x9D = TIPSMASK.DDS
+void __cdecl drawGlyphMaskedHook(int fontTextureId, int maskTextureId,
+                                 float glyphInTextureStartX,
+                                 float glyphInTextureStartY,
+                                 float glyphInTextureWidth,
+                                 float glyphInTextureHeight,
+                                 float glyphInMaskStartX,
+                                 float glyphInMaskStartY,
+                                 float displayStartX, float displayStartY,
+                                 float displayEndX, float displayEndY,
+                                 int color, uint32_t opacity) {
+  fixTextureForSplitFont(fontTextureId, glyphInTextureStartY);
+  gameExeDrawGlyphMaskedReal(fontTextureId, maskTextureId,
+                             glyphInTextureStartX, glyphInTextureStartY,
+                             glyphInTextureWidth, glyphInTextureHeight,
+                             glyphInMaskStartX, glyphInMaskStartY,
+                             displayStartX, displayStartY,
+                             displayEndX, displayEndY,
+                             color, opacity);
+}
+
+// used for the backlog, decay effect for boundaries of view area
+// same as drawGlyphMaskedHook, glyphInMaskStartX/Y are taken from displayStartX/Y
+// maskTextureId is always 0x9B = BLOGMASK.DDS
+void __cdecl drawGlyphMasked2Hook(int fontTextureId, int maskTextureId,
+                                  float glyphInTextureStartX,
+                                  float glyphInTextureStartY,
+                                  float glyphInTextureWidth,
+                                  float glyphInTextureHeight,
+                                  float displayStartX, float displayStartY,
+                                  float displayEndX, float displayEndY,
+                                  int color, uint32_t opacity) {
+  fixTextureForSplitFont(fontTextureId, glyphInTextureStartY);
+  gameExeDrawGlyphMasked2Real(fontTextureId, maskTextureId,
+                              glyphInTextureStartX, glyphInTextureStartY,
+                              glyphInTextureWidth, glyphInTextureHeight,
+                              displayStartX, displayStartY,
+                              displayEndX, displayEndY,
+                              color, opacity);
 }
 
 void __cdecl drawDialogueHook(int fontNumber, int pageNumber, uint32_t opacity,

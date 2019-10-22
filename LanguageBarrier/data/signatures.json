@@ -113,6 +113,14 @@
             "pattern": "55 8B EC 83 EC 34 A1 ?? ?? ?? ?? 33 C5 89 45 FC F3 0F 10 4D 1C F3 0F 10 45 24 F3 0F 5C C1 F3 0F 11 4D DC F3 0F 10 4D 20 56 FF 75 2C 8B 75 08",
             "offset": 0
         },
+        "drawGlyphMasked": {
+            "pattern": "55 8B EC 83 EC 7C A1 ?? ?? ?? ?? 33 C5 89 45 FC F3 0F 10 45 28",
+            "offset": 0
+        },
+        "drawGlyphMasked2": {
+            "pattern": "55 8B EC 83 EC 7C A1 ?? ?? ?? ?? 33 C5 89 45 FC F3 0F 10 45 10",
+            "offset": 0
+        },
         "drawRectangle": {
             "pattern": "55 8B EC 83 EC 24 A1 ?? ?? ?? ?? 33 C5 89 45 FC F3 0F 10 45 08 FF 75 18 F3 0F 11 45 DC",
             "offset": 0
