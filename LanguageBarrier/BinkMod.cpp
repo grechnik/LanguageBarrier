@@ -1,11 +1,10 @@
 #include "LanguageBarrier.h"
-#include <Simd/SimdLib.h>
 #include <unordered_map>
 #include "BinkMod.h"
 #include "Config.h"
 #include "Game.h"
 #include <csri/csri.h>
-#include <xmmintrin.h>
+#include <emmintrin.h>
 
 // partial
 typedef struct BINK {
@@ -52,6 +51,10 @@ typedef int(__thiscall* MgsBinkSetPausedProc)(MgsBink_t* pThis, char paused);
 static MgsBinkSetPausedProc gameExeMgsBinkSetPaused = NULL;
 static MgsBinkSetPausedProc gameExeMgsBinkSetPausedReal = NULL;
 
+static const size_t alignment =
+    32;  // for fast memcpy, sizeof __m256, dunno if this *actually* matters but
+         // since we only use it for giant framebuffers, might as well
+
 typedef struct {
   uint32_t bgmId;
   void* framebuffer;
@@ -89,9 +92,7 @@ bool binkModInit() {
     return false;
 
   for (auto font : Config::fmv().j["fonts"]) {
-    std::stringstream ss;
-    ss << "languagebarrier\\subs\\fonts\\" << font.get<std::string>();
-    std::string path = ss.str();
+    std::string path = "languagebarrier\\subs\\fonts\\" + font.get<std::string>();
     AddFontResourceExA(path.c_str(), FR_PRIVATE, NULL);
   }
 
@@ -137,26 +138,17 @@ BINK* __stdcall BinkOpenHook(const char* name, uint32_t flags) {
     subFileName = Config::fmv().j["subs"]["lqKaraoke"][tmp].get<std::string>();
 
   if (!subFileName.empty()) {
-    std::stringstream ssSubPath;
-    ssSubPath << "languagebarrier\\subs\\" << subFileName;
-    std::string subPath = ssSubPath.str();
-    std::stringstream logstr;
-    logstr << "Using sub track " << subPath << " if available.";
-    LanguageBarrierLog(logstr.str());
+    std::string subPath = "languagebarrier\\subs\\" + subFileName;
+    LanguageBarrierLog("Using sub track " + subPath + " if available.");
 
     // tried csri_open_file(), didn't work, not sure why. Not like it's a big
     // deal, anyway.
-    std::ifstream in(subPath, std::ios::in | std::ios::binary);
-    if (in.good()) {
-      in.seekg(0, std::ios::end);
-      std::string sub(in.tellg(), 0);
-      in.seekg(0, std::ios::beg);
-      in.read(&sub[0], sub.size());
-
+    try {
+      std::string sub = slurpFile(subPath);
       state->csri =
           csri_open_mem(csri_renderer_default(), &sub[0], sub.size(), NULL);
+    } catch (...) {
     }
-    in.close();
   }
 
   return bnk;
@@ -168,7 +160,7 @@ void __stdcall BinkCloseHook(BINK* bnk) {
 
   BinkModState_t* state = stateMap[bnk];
   if (state->framebuffer) {
-    SimdFree(state->framebuffer);
+    _aligned_free(state->framebuffer);
   }
   if (state->csri) {
     csri_close(state->csri);
@@ -198,22 +190,21 @@ int32_t __stdcall BinkCopyToBufferHook(BINK* bnk, void* dest, int32_t destpitch,
   uint32_t destwidth = destpitch / 4;
   double time = ((double)bnk->FrameRateDiv * (double)bnk->FrameNum) /
                 (double)bnk->FrameRate;
-  size_t align = SimdAlignment();
 
   if (bnk->FrameNum == state->lastFrameNum && destheight == state->destheight &&
       destwidth == state->destwidth) {
-    SimdCopy((uint8_t*)state->framebuffer, destpitch, destwidth, destheight, 4,
-             (uint8_t*)dest, destpitch);
+    memcpy(dest, state->framebuffer, destpitch * destheight);
     return 0;
   }
-  if (state->destheight != destheight || state->destwidth != destwidth) {
+  if (state->destheight != destheight || state->destwidth != destwidth ||
+      state->framebuffer == NULL) {
     state->destheight = destheight;
     state->destwidth = destwidth;
     if (state->framebuffer != NULL) {
-      SimdFree(state->framebuffer);
+      _aligned_free(state->framebuffer);
     }
-    state->framebuffer =
-        SimdAllocate(SimdAlign(destpitch * destheight, align), align);
+    state->framebuffer = _aligned_malloc(
+        alignCeil(destpitch * destheight, alignment), alignment);
   }
 
   state->lastFrameNum = bnk->FrameNum;
@@ -245,8 +236,7 @@ int32_t __stdcall BinkCopyToBufferHook(BINK* bnk, void* dest, int32_t destpitch,
     ((uint32_t*)state->framebuffer)[i] |= 0xFF000000;
   }
 
-  SimdCopy((uint8_t*)state->framebuffer, destpitch, destpitch / 4, destheight,
-           4, (uint8_t*)dest, destpitch);
+  memcpy(dest, state->framebuffer, destpitch * destheight);
 
   return retval;
 }

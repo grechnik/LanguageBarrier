@@ -9,10 +9,16 @@
 #include <cstdlib>
 #include <wchar.h>
 #include <string>
-#include <sstream>
 #include "MinHook.h"
 
 namespace lb {
+size_t alignCeil(size_t val, size_t align);
+std::string slurpFile(const std::string &fileName);
+std::string slurpFile(const std::wstring &fileName);
+std::string wideToUTF8(const wchar_t* data, size_t size);
+inline std::string wideToUTF8(const wchar_t* data) {
+  return wideToUTF8(data, wcslen(data));
+}
 void LanguageBarrierInit();
 void LanguageBarrierLog(const std::string &text);
 bool scanCreateEnableHook(char *category, char *name, uintptr_t *ppTarget,

@@ -1,8 +1,6 @@
 #ifndef __CONFIG_H__
 #define __CONFIG_H__
 
-#include <fstream>
-#include <sstream>
 #include <stdexcept>
 #include <Shlwapi.h>
 #include <ShlObj.h>
@@ -39,23 +37,16 @@ class Config {
                              REFKNOWNFOLDERID rfid) {
     wchar_t* appdata;
     SHGetKnownFolderPath(rfid, NULL, NULL, &appdata);
-    // apparently it doesn't like writing to the output directly
-    std::wstringstream result;
-    result << appdata;
+    std::wstring result = std::wstring(appdata) + L"\\" + pathEnd;
     CoTaskMemFree(appdata);
-    result << L"\\" << pathEnd;
-    return result.str();
+    return result;
   }
 
   void load(const char* defaultStr) {
-    std::stringstream ss;
-    ss << defaultStr;
-    json tmp1;
-    tmp1 << ss;
+    json tmp1 = json::parse(defaultStr);
     json tmp2;
     try {
-      std::ifstream infile(filename);
-      tmp2 << infile;
+      tmp2 = json::parse(slurpFile(filename));
     } catch (...) {
     }
     j = json_merge(tmp1, tmp2);
@@ -91,8 +82,13 @@ class Config {
   json j;
 
   void save() {
-    std::ofstream outfile(filename);
-    outfile << j;
+    std::string s = j.dump(4);
+    HANDLE h = CreateFileW(filename.c_str(), GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (h != INVALID_HANDLE_VALUE) {
+      DWORD written;
+      WriteFile(h, s.data(), s.size(), &written, NULL);
+      CloseHandle(h);
+    }
   };
   static void init() {
     config();

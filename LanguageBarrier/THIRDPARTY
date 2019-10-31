@@ -25,12 +25,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 -------------------------------------------------------------------------------
-Simd Library
-http://simd.sourceforge.net/
-http://github.com/ermig1979/Simd
-2011-2016 Yermalayeu Ihar [http://sourceforge.net/u/ermig1979/profile/].
-2014-2016 Antonenka Mikhail [http://sourceforge.net/u/misha-minsk/profile/].
--------------------------------------------------------------------------------
 
 MinHook - The Minimalistic API Hooking Library for x64/x86
 Copyright (C) 2009-2016 Tsuda Kageyu.

@@ -1,6 +1,5 @@
 #include "LanguageBarrier.h"
 #include <ctime>
-#include <fstream>
 #include "MinHook.h"
 #include "Config.h"
 #include "Game.h"
@@ -9,6 +8,36 @@
 static bool isInitialised = false;
 
 namespace lb {
+size_t alignCeil(size_t val, size_t align) {
+  return (val % align == 0) ? val : val + align - (val % align);
+}
+std::string slurpFileCommon(HANDLE h) {
+  if (h == INVALID_HANDLE_VALUE)
+    throw std::runtime_error("cannot read file");
+  DWORD size = GetFileSize(h, NULL);
+  std::string result(size, 0);
+  DWORD read;
+  if (!ReadFile(h, &result[0], size, &read, NULL) || read != size) {
+    CloseHandle(h);
+    throw std::runtime_error("cannot read file");
+  }
+  CloseHandle(h);
+  return result;
+}
+std::string slurpFile(const std::string &fileName) {
+  HANDLE h = CreateFileA(fileName.c_str(), GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
+  return slurpFileCommon(h);
+}
+std::string slurpFile(const std::wstring &fileName) {
+  HANDLE h = CreateFileW(fileName.c_str(), GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
+  return slurpFileCommon(h);
+}
+std::string wideToUTF8(const wchar_t* data, size_t size) {
+  std::string result(size * 4, 0);
+  int actualSize = WideCharToMultiByte(CP_UTF8, 0, data, size, &result[0], result.size(), NULL, NULL);
+  result.resize(actualSize);
+  return result;
+}
 void LanguageBarrierInit() {
   if (isInitialised) {
     LanguageBarrierLog("LanguageBarrierInit() called twice...");
@@ -23,9 +52,7 @@ void LanguageBarrierInit() {
 
   MH_STATUS mhStatus = MH_Initialize();
   if (mhStatus != MH_OK) {
-    std::stringstream logstr;
-    logstr << "MinHook failed to initialize!" << MH_StatusToString(mhStatus);
-    LanguageBarrierLog(logstr.str());
+    LanguageBarrierLog(std::string("MinHook failed to initialize!") + MH_StatusToString(mhStatus));
     return;
   }
 
@@ -36,20 +63,27 @@ void LanguageBarrierInit() {
   _wsplitpath_s(path, NULL, 0, NULL, 0, exeName, _MAX_FNAME, NULL, 0);
   if (_wcsicmp(exeName, L"Launcher") != 0) {
     {
-      std::stringstream logstr;
-      logstr << "Game.exe detected";
-      LanguageBarrierLog(logstr.str());
+      LanguageBarrierLog("Game.exe detected");
     }
     gameInit();
   }
 }
 // TODO: make this better
 void LanguageBarrierLog(const std::string &text) {
-  std::ofstream logFile("languagebarrier\\log.txt",
-                        std::ios_base::out | std::ios_base::app);
-  std::time_t t = std::time(NULL);
-  logFile << std::put_time(std::gmtime(&t), "[%D %r] ");
-  logFile << text << std::endl;
+  HANDLE h = CreateFileA("languagebarrier\\log.txt", GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+  if (h == INVALID_HANDLE_VALUE)
+    return;
+  SetFilePointer(h, 0, NULL, FILE_END);
+  SYSTEMTIME time;
+  GetSystemTime(&time);
+  char buffer[64];
+  sprintf(buffer, "[%02d/%02d/%02d %02d:%02d:%02d] ",
+    time.wMonth, time.wDay, time.wYear % 100,
+    time.wHour, time.wMinute, time.wSecond);
+  std::string result = std::string(buffer) + text + "\r\n";
+  DWORD written;
+  WriteFile(h, result.data(), result.size(), &written, NULL);
+  CloseHandle(h);
 }
 bool scanCreateEnableHook(char *category, char *name, uintptr_t *ppTarget,
                           LPVOID pDetour, LPVOID *ppOriginal) {
@@ -59,24 +93,16 @@ bool scanCreateEnableHook(char *category, char *name, uintptr_t *ppTarget,
   MH_STATUS mhStatus;
   mhStatus = MH_CreateHook((LPVOID)*ppTarget, pDetour, ppOriginal);
   if (mhStatus != MH_OK) {
-    std::stringstream logstr;
-    logstr << "Failed to create hook " << name << ": "
-           << MH_StatusToString(mhStatus);
-    LanguageBarrierLog(logstr.str());
+    LanguageBarrierLog(std::string("Failed to create hook ") + name + ": " + MH_StatusToString(mhStatus));
     return false;
   }
   mhStatus = MH_EnableHook((LPVOID)*ppTarget);
   if (mhStatus != MH_OK) {
-    std::stringstream logstr;
-    logstr << "Failed to enable hook " << name << ": "
-           << MH_StatusToString(mhStatus);
-    LanguageBarrierLog(logstr.str());
+    LanguageBarrierLog(std::string("Failed to enable hook ") + name + ": " + MH_StatusToString(mhStatus));
     return false;
   }
 
-  std::stringstream logstr;
-  logstr << "Successfully hooked " << name;
-  LanguageBarrierLog(logstr.str());
+  LanguageBarrierLog(std::string("Successfully hooked ") + name);
 
   return true;
 }
@@ -87,24 +113,18 @@ bool createEnableApiHook(LPCWSTR pszModule, LPCSTR pszProcName, LPVOID pDetour,
   mhStatus =
       MH_CreateHookApiEx(pszModule, pszProcName, pDetour, ppOriginal, &pTarget);
   if (mhStatus != MH_OK) {
-    std::stringstream logstr;
-    logstr << "Failed to create API hook " << pszModule << "." << pszProcName
-           << ": " << MH_StatusToString(mhStatus);
-    LanguageBarrierLog(logstr.str());
+    LanguageBarrierLog("Failed to create API hook " + wideToUTF8(pszModule) +
+      "." + pszProcName + ": " + MH_StatusToString(mhStatus));
     return false;
   }
   mhStatus = MH_EnableHook(pTarget);
   if (mhStatus != MH_OK) {
-    std::stringstream logstr;
-    logstr << "Failed to enable API hook " << pszModule << "." << pszProcName
-           << ": " << MH_StatusToString(mhStatus);
-    LanguageBarrierLog(logstr.str());
+    LanguageBarrierLog("Failed to enable API hook " + wideToUTF8(pszModule) +
+      "." + pszProcName + ": " + MH_StatusToString(mhStatus));
     return false;
   }
 
-  std::stringstream logstr;
-  logstr << "Successfully hooked " << pszModule << "." << pszProcName;
-  LanguageBarrierLog(logstr.str());
+  LanguageBarrierLog("Successfully hooked " + wideToUTF8(pszModule) + "." + pszProcName);
 
   return true;
 }

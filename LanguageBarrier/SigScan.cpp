@@ -2,7 +2,6 @@
 #include <dbghelp.h>
 #include <malloc.h>
 #include <string>
-#include <iomanip>
 #include "Config.h"
 
 // Stolen from
@@ -123,16 +122,15 @@ uintptr_t FindPattern(vector<unsigned char> data, const char* pszPattern,
 
 namespace lb {
 uintptr_t sigScan(char* category, char* sigName, bool isData = false) {
-  std::stringstream logstr;
-  logstr << "SigScan: looking for " << category << "/" << sigName << "... "
-         << std::endl;
+  std::string logstr = std::string("SigScan: looking for ") + category + "/" + sigName + "...\r\n";
 
   json sig = Config::sigs().j[category][sigName];
   std::string sPattern = sig["pattern"].get<std::string>();
   const char* pattern = sPattern.c_str();
   size_t offset = sig["offset"].get<size_t>();
 
-  logstr << sPattern << std::endl;
+  logstr += sPattern;
+  logstr += "\r\n";
 
   HMODULE exeModule = GetModuleHandle(NULL);
   IMAGE_NT_HEADERS* pNtHdr = ImageNtHeader(exeModule);
@@ -149,17 +147,19 @@ uintptr_t sigScan(char* category, char* sigName, bool isData = false) {
         (unsigned char*)baseAddress,
         (unsigned char*)baseAddress + pSectionHdr->Misc.VirtualSize);
     uintptr_t retval =
-        (uintptr_t)FindPattern(rawData, pattern, baseAddress, offset, sig["occurrence"].get<int>());
+        (uintptr_t)FindPattern(rawData, pattern, baseAddress, offset, sig.value<int>("occurrence", 0));
 
     if (retval != NULL) {
-      logstr << " found at 0x" << std::hex << retval;
-      LanguageBarrierLog(logstr.str());
+      char buffer[64];
+      logstr += "found at 0x";
+      logstr += _ultoa(retval, buffer, 16);
+      LanguageBarrierLog(logstr);
       return retval;
     }
     pSectionHdr++;
   }
-  logstr << " not found!";
-  LanguageBarrierLog(logstr.str());
+  logstr += " not found!";
+  LanguageBarrierLog(logstr);
   return NULL;
 }
 }
