@@ -123,6 +123,7 @@ endlocal</Command>
     <ClInclude Include="Game.h" />
     <ClInclude Include="GameText.h" />
     <ClInclude Include="LanguageBarrier.h" />
+    <ClInclude Include="Launcher.h" />
     <ClInclude Include="lbjson.h" />
     <ClInclude Include="MemoryManagement.h" />
     <ClInclude Include="PoolAllocator.h" />
@@ -154,6 +155,7 @@ endlocal</Command>
     <ClCompile Include="Script.cpp" />
     <ClCompile Include="SigExpr.cpp" />
     <ClCompile Include="SigScan.cpp" />
+    <ClCompile Include="Launcher.cpp" />
     <ClCompile Include="TextReplace.cpp" />
   </ItemGroup>
   <ItemGroup>

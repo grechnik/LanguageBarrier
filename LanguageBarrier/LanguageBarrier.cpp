@@ -5,6 +5,7 @@
 #include "Config.h"
 #include "Game.h"
 #include "GameText.h"
+#include "Launcher.h"
 #include "MinHook.h"
 #include "Script.h"
 #include "SigScan.h"
@@ -228,6 +229,7 @@ void LanguageBarrierInit() {
         system(cmd.c_str());
         exit(0);
       }
+      lb::enhanceLauncher();
       return;
     }
 
