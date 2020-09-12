@@ -13,13 +13,13 @@ size_t alignCeil(size_t val, size_t align) {
 }
 std::string slurpFileCommon(HANDLE h) {
   if (h == INVALID_HANDLE_VALUE)
-    throw std::runtime_error("cannot read file");
+    return std::string();
   DWORD size = GetFileSize(h, NULL);
   std::string result(size, 0);
   DWORD read;
   if (!ReadFile(h, &result[0], size, &read, NULL) || read != size) {
     CloseHandle(h);
-    throw std::runtime_error("cannot read file");
+    return std::string();
   }
   CloseHandle(h);
   return result;

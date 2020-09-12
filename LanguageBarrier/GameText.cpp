@@ -213,6 +213,17 @@ typedef void(__cdecl *GetVisibleLinksProc)(
     unsigned lineSkipCount, unsigned lineDisplayCount,
     unsigned baseGlyphSize, char *result);
 static GetVisibleLinksProc gameExeGetVisibleLinks = NULL;
+typedef int(__cdecl *DialogueIsLetterProc)(int c);
+static DialogueIsLetterProc gameExeDialogueIsLetter = NULL;
+typedef void(__cdecl *DrawMailTextForMDEListProc)(
+    int xOffset, int yOffset, const char *sc3string,
+    int width, uint32_t opacity,
+    int visibleAreaTop, int visibleAreaBottom);
+static DrawMailTextForMDEListProc gameExeDrawMailTextForMDEList;
+typedef void(__cdecl *DrawMailTitleForMDEListProc)(
+    int xOffset, int yOffset, const char *sc3string,
+    int width, uint32_t opacity);
+static DrawMailTitleForMDEListProc gameExeDrawMailTitleForMDEList;
 
 static uintptr_t gameExeDialogueLayoutWidthLookup1 = NULL;
 static uintptr_t gameExeDialogueLayoutWidthLookup1Return = NULL;
@@ -226,8 +237,6 @@ static uintptr_t gameExeNewTipWidthLookup = NULL;
 static uintptr_t gameExeNewTipWidthLookupReturn = NULL;
 static uintptr_t gameExeTipAltTitleWidthLookup = NULL;
 static uintptr_t gameExeTipAltTitleWidthLookupReturn = NULL;
-static uintptr_t gameExeDialogueSetLineBreakFlags = NULL;
-static uintptr_t gameExeDialogueSetLineBreakFlagsReturn = NULL;
 
 static DialoguePage_t *gameExeDialoguePages =
     NULL;  // (DialoguePage_t *)0x164D680;
@@ -292,21 +301,8 @@ __declspec(naked) void tipAltTitleWidthLookupHook() {
   }
 }
 
-__declspec(naked) void dialogueSetLineBreakFlagsHook() {
-  __asm {
-    test charFlags[esi], 1
-    jz nope
-    mov ecx, [gameExeLineBreakFlags]
-    test charFlags[edx], 1
-    jz noprev
-    or byte ptr [eax+ecx], 9
-noprev:
-    test charFlags[edi], 1
-    jz nope
-    or byte ptr [eax+ecx], 0Ah
-nope:
-    jmp gameExeDialogueSetLineBreakFlagsReturn
-  }
+int __cdecl dialogueIsLetterHook(int c) {
+  return charFlags[c] & 1;
 }
 
 namespace lb {
@@ -380,6 +376,11 @@ void __cdecl getVisibleLinksHook(unsigned lineLength, const char *sc3string,
                                  unsigned baseGlyphSize, char *result);
 int __cdecl getSc3StringLineCountHook(int lineLength, char *sc3string,
                                       unsigned int baseGlyphSize);
+void __cdecl drawMailTextForMDEList(int xOffset, int yOffset, const char *sc3string,
+                                    int width, uint32_t opacity,
+                                    int visibleAreaTop, int visibleAreaBottom);
+void __cdecl drawMailTitleForMDEList(int xOffset, int yOffset, const char *sc3string,
+                                     int width, uint32_t opacity);
 // There are a bunch more functions like these but I haven't seen them get hit
 // during debugging and the original code *mostly* works okay if it recognises
 // western text as variable-width
@@ -388,18 +389,18 @@ int __cdecl getSc3StringLineCountHook(int lineLength, char *sc3string,
 
 void gameTextInit() {
   // gee I sure hope nothing important ever goes in OUTLINE_TEXTURE_ID...
-  try {
-    // assigned texture ids should be consistent with fixTextureForSplitFont
-    fontBuffers[2] = slurpFile("languagebarrier\\font_a.png");
-    fontBuffers[3] = slurpFile("languagebarrier\\font_b.png");
-    fontBuffers[0] = slurpFile("languagebarrier\\font-outline_a.png");
-    fontBuffers[1] = slurpFile("languagebarrier\\font-outline_b.png");
+  // assigned texture ids should be consistent with fixTextureForSplitFont
+  fontBuffers[2] = slurpFile("languagebarrier\\font_a.png");
+  fontBuffers[3] = slurpFile("languagebarrier\\font_b.png");
+  fontBuffers[0] = slurpFile("languagebarrier\\font-outline_a.png");
+  fontBuffers[1] = slurpFile("languagebarrier\\font-outline_b.png");
+  if (!fontBuffers[2].empty() && !fontBuffers[3].empty() && !fontBuffers[0].empty() && !fontBuffers[1].empty()) {
     hasSplitFont = true;
     for (int i = 0; i < 4; i++) {
       gameLoadTexture(OUTLINE_TEXTURE_ID + i, &(fontBuffers[i][0]), fontBuffers[i].size());
     }
     LanguageBarrierLog("split font loaded");
-  } catch (std::runtime_error&) {
+  } else {
     LanguageBarrierLog("failed to load split font");
   }
   if (!hasSplitFont) {
@@ -422,6 +423,7 @@ void gameTextInit() {
         (LPVOID)drawGlyphMasked2Hook, (LPVOID*)&gameExeDrawGlyphMasked2Real);
   } else {
     gameExeDrawGlyph = (DrawGlyphProc)sigScan("game", "drawGlyph");
+    gameExeDrawGlyphMasked2 = (DrawGlyphMaskedProc2)sigScan("game", "drawGlyphMasked2");
   }
   gameExeDrawRectangle = (DrawRectangleProc)sigScan("game", "drawRectangle");
   gameExeSc3Eval = (Sc3EvalProc)sigScan("game", "sc3Eval");
@@ -487,11 +489,11 @@ void gameTextInit() {
                                         0x18)) -
                          0xC);
   gameExeGlyphWidthsFont1 =
-      *(uint8_t **)((uint8_t *)(gameExeDrawPhoneText) + 0x83);
+      *(uint8_t **)((uint8_t *)(gameExeDrawPhoneText) + 0x9B);
   gameExeGlyphWidthsFont2 =
-      *(uint8_t **)((uint8_t *)(gameExeDrawPhoneText) + 0x74);
+      *(uint8_t **)((uint8_t *)(gameExeDrawPhoneText) + 0x8C);
   gameExeColors =
-      (int *)(*(uint32_t *)((uint8_t *)(gameExeDrawPhoneText) + 0x272) - 0x4);
+      (int *)(*(uint32_t *)((uint8_t *)(gameExeDrawPhoneText) + 0x2AE) - 0x4);
 
   scanCreateEnableHook("game", "dialogueLayoutWidthLookup1",
                        &gameExeDialogueLayoutWidthLookup1,
@@ -513,13 +515,9 @@ void gameTextInit() {
                        tipsListWidthLookupHook, NULL);
   gameExeTipsListWidthLookupReturn =
       (uintptr_t)((uint8_t *)gameExeTipsListWidthLookup + 0x14);
-  scanCreateEnableHook("game", "dialogueSetLineBreakFlags",
-                       &gameExeDialogueSetLineBreakFlags,
-                       dialogueSetLineBreakFlagsHook, NULL);
-  gameExeLineBreakFlags =
-      (uint8_t *)(*(uint32_t *)((uint8_t *)gameExeDialogueSetLineBreakFlags + 0x12));
-  gameExeDialogueSetLineBreakFlagsReturn =
-      (uintptr_t)((uint8_t *)gameExeDialogueSetLineBreakFlags + 0x26);
+  scanCreateEnableHook("game", "dialogueIsLetter",
+                       (uintptr_t*)&gameExeDialogueIsLetter,
+                       dialogueIsLetterHook, NULL);
   scanCreateEnableHook("game", "newTipWidthLookup",
                        &gameExeNewTipWidthLookup,
                        newTipWidthLookupHook, NULL);
@@ -530,6 +528,12 @@ void gameTextInit() {
                        tipAltTitleWidthLookupHook, NULL);
   gameExeTipAltTitleWidthLookupReturn =
       (uintptr_t)((uint8_t *)gameExeTipAltTitleWidthLookup + 0x18);
+  scanCreateEnableHook("game", "drawMailTextForMailList",
+                       (uintptr_t*)&gameExeDrawMailTextForMDEList,
+                       drawMailTextForMDEList, NULL);
+  scanCreateEnableHook("game", "drawMailTitleForMailList",
+                       (uintptr_t*)&gameExeDrawMailTitleForMDEList,
+                       drawMailTitleForMDEList, NULL);
 
   FILE *widthsfile = fopen("languagebarrier\\widths.bin", "rb");
   fread(widths, 1, TOTAL_NUM_CHARACTERS, widthsfile);
@@ -1083,5 +1087,56 @@ int __cdecl getSc3StringLineCountHook(int lineLength, char *sc3string,
   processSc3TokenList(0, 0, lineLength, words, LINECOUNT_DISABLE_OR_ERROR, 0,
                       baseGlyphSize, &str, true, 1.0f, -1, NOT_A_LINK, 0);
   return str.lines + 1;
+}
+
+// MDE has yet another interface for extra menu, list of opened mails,
+// and of course there is a bunch of totally new code to handle this.
+void __cdecl drawMailTextForMDEList(
+    int xOffset, int yOffset, const char *sc3string,
+    int width, uint32_t opacity, int visibleAreaTop, int visibleAreaBottom)
+{
+  std::list<StringWord_t> words;
+  semiTokeniseSc3String(sc3string, words, 24, width);
+  ProcessedSc3String_t str;
+  processSc3TokenList(xOffset, yOffset, width,
+                      words, LINECOUNT_DISABLE_OR_ERROR, 0xFFFFFF, 24,
+                      &str, false, COORDS_MULTIPLIER, -1,
+                      NOT_A_LINK, 0xFFFFFF);
+  for (int i = 0; i < str.length; i++) {
+    if (str.displayEndY[i] >= visibleAreaTop
+        && str.displayStartY[i] < visibleAreaBottom)
+    {
+      gameExeDrawGlyphMasked2(
+          FIRST_FONT_ID + 1, 0xA8,
+          str.textureStartX[i], str.textureStartY[i],
+          str.textureWidth[i], str.textureHeight[i],
+          str.displayStartX[i], str.displayStartY[i],
+          str.displayEndX[i], str.displayEndY[i],
+          str.color[i], opacity);
+    }
+  }
+}
+
+void __cdecl drawMailTitleForMDEList(
+    int xOffset, int yOffset, const char *sc3string,
+    int width, uint32_t opacity)
+{
+  std::list<StringWord_t> words;
+  semiTokeniseSc3String(sc3string, words, 24, width);
+  ProcessedSc3String_t str;
+  yOffset += 3; // to make it visually aligned with the [SUB] icon
+  processSc3TokenList(xOffset, yOffset, width,
+                      words, 1, 0xFFFFFF, 24,
+                      &str, false, COORDS_MULTIPLIER, -1,
+                      NOT_A_LINK, 0xFFFFFF, true);
+  for (int i = 0; i < str.length; i++) {
+    gameExeDrawGlyphMasked2(
+        FIRST_FONT_ID + 1, 0xA8,
+        str.textureStartX[i], str.textureStartY[i],
+        str.textureWidth[i], str.textureHeight[i],
+        str.displayStartX[i], str.displayStartY[i],
+        str.displayEndX[i], str.displayEndY[i],
+        str.color[i], opacity);
+  }
 }
 }

@@ -143,12 +143,10 @@ BINK* __stdcall BinkOpenHook(const char* name, uint32_t flags) {
 
     // tried csri_open_file(), didn't work, not sure why. Not like it's a big
     // deal, anyway.
-    try {
-      std::string sub = slurpFile(subPath);
+    std::string sub = slurpFile(subPath);
+    if (!sub.empty())
       state->csri =
           csri_open_mem(csri_renderer_default(), &sub[0], sub.size(), NULL);
-    } catch (...) {
-    }
   }
 
   return bnk;

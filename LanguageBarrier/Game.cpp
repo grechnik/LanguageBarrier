@@ -102,8 +102,6 @@ static MgsD3D9State *gameExePMgsD3D9State = NULL;
 static IDirect3D9Ex **gameExePpD3D9Ex = NULL;
 static D3DPRESENT_PARAMETERS *gameExePPresentParameters = NULL;
 
-static uintptr_t gameExeTextureLoadInit1 = NULL;
-static uintptr_t gameExeTextureLoadInit2 = NULL;
 static uintptr_t gameExeGslPngload = NULL;
 static uintptr_t gameExeMpkMount = NULL;
 static uintptr_t gameExePpLotsOfState = NULL;
@@ -133,8 +131,6 @@ void gameInit() {
 
   // TODO: maybe just scan for all signatures inside SigScan?
   // auto-initialisation, similarly to Config.h
-  gameExeTextureLoadInit1 = sigScan("game", "textureLoadInit1");
-  gameExeTextureLoadInit2 = sigScan("game", "textureLoadInit2");
   gameExeGslPngload = sigScan("game", "gslPngload");
   gameExeMpkMount = sigScan("game", "mpkMount");
   gameExeEarlyInit = (EarlyInitProc)sigScan("game", "earlyInit");

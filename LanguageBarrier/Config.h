@@ -5,10 +5,6 @@
 #include <Shlwapi.h>
 #include <ShlObj.h>
 #include "data\defaultConfigJsonStr.h"
-#include "data\defaultSignaturesJsonStr.h"
-#include "data\defaultFmvJsonStr.h"
-#include "data\defaultFileredirectionJsonStr.h"
-#include "data\defaultStringredirectionJsonStr.h"
 #include "lbjson.h"
 
 namespace lb {
@@ -19,9 +15,9 @@ class Config {
 
  private:
   const std::wstring filename;
-  Config(const char* defaultStr, const std::wstring& _filename)
+  explicit Config(const std::wstring& _filename)
       : filename(_filename) {
-    load(defaultStr);
+    j = json::parse(slurpFile(filename));
   }
   Config(const char* defaultStr, const std::wstring& pathEnd,
          REFKNOWNFOLDERID rfid)
@@ -60,22 +56,19 @@ class Config {
     return s;
   }
   static Config& sigs() {
-    static Config s(defaultSignaturesJsonStr,
-                    L"languagebarrier\\signatures.json");
+    static Config s(L"languagebarrier\\signatures.json");
     return s;
   }
   static Config& fmv() {
-    static Config s(defaultFmvJsonStr, L"languagebarrier\\fmv.json");
+    static Config s(L"languagebarrier\\fmv.json");
     return s;
   }
   static Config& fileredirection() {
-    static Config s(defaultFileredirectionJsonStr,
-                    L"languagebarrier\\fileredirection.json");
+    static Config s(L"languagebarrier\\fileredirection.json");
     return s;
   }
   static Config& stringredirection() {
-    static Config s(defaultStringredirectionJsonStr,
-                    L"languagebarrier\\stringredirection.json");
+    static Config s(L"languagebarrier\\stringredirection.json");
     return s;
   }
 
